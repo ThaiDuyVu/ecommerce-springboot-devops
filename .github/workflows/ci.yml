@@ -1,6 +1,8 @@
 name: Ecommerce Backend CI
 
+
 on:
+
   push:
     branches:
       - main
@@ -10,29 +12,104 @@ on:
       - main
 
 
+
 jobs:
 
   build:
 
     runs-on: ubuntu-latest
 
+
     steps:
 
+
       - name: Checkout source code
+
         uses: actions/checkout@v4
 
 
       - name: Setup JDK 21
+
         uses: actions/setup-java@v4
+
         with:
+
           java-version: '21'
+
           distribution: 'temurin'
+
           cache: maven
 
 
-      - name: Build with Maven
-        run: mvn clean package -DskipTests
+
+      # =========================
+      # Start Test Database
+      # =========================
+
+      - name: Start MySQL Test Database
+
+        run: |
+
+          docker compose \
+          -f docker-compose.test.yml \
+          up -d
 
 
-      - name: Build Docker image
-        run: docker build -t ecommerce-backend .
+
+      # =========================
+      # Wait Database Ready
+      # =========================
+
+      - name: Wait for MySQL Test Database
+
+        run: |
+
+          until docker exec ecommerce-mysql-test \
+          mysqladmin ping \
+          -h localhost \
+          -uroot \
+          -proot \
+          --silent
+
+          do
+
+            echo "Waiting for MySQL..."
+
+            sleep 3
+
+          done
+
+
+
+      - name: Run Integration Tests
+
+        run: |
+
+          mvn clean test \
+          -Dspring.profiles.active=test
+
+      - name: Build Application
+
+        run: |
+
+          mvn clean package \
+          -DskipTests
+
+
+      - name: Build Docker Image
+
+        run: |
+
+          docker build \
+          -t ecommerce-backend:${{ github.sha }} .
+
+
+      - name: Stop Test Database
+
+        if: always()
+
+        run: |
+
+          docker compose \
+          -f docker-compose.test.yml \
+          down

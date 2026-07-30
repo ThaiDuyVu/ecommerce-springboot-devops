@@ -41,6 +41,8 @@ public class AuthServiceImpl implements AuthService {
     private final OtpService otpService;
     private final RefreshTokenService refreshTokenService;
     private final RateLimitService rateLimitService;
+
+
     @Override
     public void sendSignupOtp(String email) throws Exception {
 
@@ -350,6 +352,7 @@ public class AuthServiceImpl implements AuthService {
 
         return response;
     }
+
     private Authentication createAuthentication(
             String email,
             USER_ROLE role

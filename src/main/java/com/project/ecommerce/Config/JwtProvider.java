@@ -3,8 +3,8 @@ package com.project.ecommerce.Config;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
@@ -15,18 +15,27 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
+
+
 @Service
+@RequiredArgsConstructor
 public class JwtProvider {
 
-    private final SecretKey key = Keys.hmacShaKeyFor(JWT_CONSTANT.SECRET_KEY.getBytes());
+    private final SecretKey key;
 
-    public String generateToken(Authentication auth) {
-        Collection<? extends GrantedAuthority> authorities = auth.getAuthorities();
+    public String generateToken(Authentication auth){
+
+        Collection<? extends GrantedAuthority> authorities =
+                auth.getAuthorities();
+
         String roles = populateAuthorities(authorities);
+
 
         return Jwts.builder()
                 .issuedAt(new Date())
-                .expiration(new Date(new Date().getTime() + 86400000))
+                .expiration(
+                        new Date(System.currentTimeMillis()+86400000)
+                )
                 .claim("email", auth.getName())
                 .claim("authorities", roles)
                 .signWith(key)
