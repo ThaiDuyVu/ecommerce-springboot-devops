@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+
+  mysql:
+    image: mysql:8.4
+
+    container_name: ecommerce-mysql
+
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ecommerce
+      MYSQL_USER: useradmin
+      MYSQL_PASSWORD: password123
+
+    ports:
+      - "3306:3306"
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: ecommerce-backend
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    ports:
+      - "5454:5454"
+
+volumes:
+  mysql_data:

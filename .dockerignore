@@ -1,0 +1,27 @@
+# Git
+.git
+.gitignore
+
+# Maven
+target/
+
+# IDE
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Environment
+.env
+
+# Docker
+Dockerfile
+docker-compose.yml
+
+# Documentation
+HELP.md
+README.md
