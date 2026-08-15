@@ -1,8 +1,8 @@
 package com.project.ecommerce.Config;
 
-import com.project.ecommerce.Exceptions.JwtException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,82 +24,86 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JwtTokenValidator extends OncePerRequestFilter {
 
-
     private final SecretKey key;
 
+    private final JwtAuthenticationEntryPoint authenticationEntryPoint;
 
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain filterChain)
-            throws ServletException, IOException {
+            FilterChain filterChain
+    ) throws ServletException, IOException {
 
+        String authorizationHeader =
+                request.getHeader("Authorization");
 
-        String jwt=request.getHeader("Authorization");
-
-
-        if(jwt!=null && jwt.startsWith("Bearer ")){
-
-            jwt=jwt.substring(7);
-
-
-            try {
-
-
-                Claims claims =
-                        Jwts.parser()
-                                .verifyWith(key)
-                                .build()
-                                .parseSignedClaims(jwt)
-                                .getPayload();
-
-
-
-                String email =
-                        String.valueOf(claims.get("email"));
-
-
-                String authorities =
-                        String.valueOf(
-                                claims.get("authorities")
-                        );
-
-
-                List<GrantedAuthority> auths =
-                        AuthorityUtils
-                                .commaSeparatedStringToAuthorityList(
-                                        authorities
-                                );
-
-
-                Authentication authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                email,
-                                null,
-                                auths
-                        );
-
-
-                SecurityContextHolder
-                        .getContext()
-                        .setAuthentication(authentication);
-
-
-
-            }
-            catch(JwtException e){
-
-                throw new com.project.ecommerce.Exceptions.JwtException(
-                        "Invalid JWT token"
-                );
-
-            }
-
+        if (authorizationHeader == null) {
+            filterChain.doFilter(request, response);
+            return;
         }
 
+        if (!authorizationHeader.startsWith("Bearer ")) {
 
-        filterChain.doFilter(request,response);
+            authenticationEntryPoint.commence(
+                    request,
+                    response,
+                    new org.springframework.security.authentication.BadCredentialsException(
+                            "Invalid Authorization header"
+                    )
+            );
+
+            return;
+        }
+
+        String jwt = authorizationHeader.substring(7);
+
+        try {
+
+            Claims claims =
+                    Jwts.parser()
+                            .verifyWith(key)
+                            .build()
+                            .parseSignedClaims(jwt)
+                            .getPayload();
+
+            String email =
+                    claims.get("email", String.class);
+
+            String authorities =
+                    claims.get("authorities", String.class);
+
+            List<GrantedAuthority> auths =
+                    AuthorityUtils
+                            .commaSeparatedStringToAuthorityList(
+                                    authorities
+                            );
+
+            Authentication authentication =
+                    new UsernamePasswordAuthenticationToken(
+                            email,
+                            null,
+                            auths
+                    );
+
+            SecurityContextHolder
+                    .getContext()
+                    .setAuthentication(authentication);
+
+            filterChain.doFilter(request, response);
+
+        } catch (JwtException | IllegalArgumentException e) {
+
+            SecurityContextHolder.clearContext();
+
+            authenticationEntryPoint.commence(
+                    request,
+                    response,
+                    new org.springframework.security.authentication.BadCredentialsException(
+                            "Invalid or expired JWT token",
+                            e
+                    )
+            );
+        }
     }
-
 }

@@ -21,7 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-@Profile("dev")
+@Profile({"dev", "dev.local"})
 @Configuration
 @RequiredArgsConstructor
 public class SeedDataConfig {
@@ -74,7 +74,7 @@ public class SeedDataConfig {
     private void seedCustomer() {
 
         if (userRepository.findByEmail(
-                "duykimthao010101@gmail.com.com"
+                "duykimthao010101@gmail.com"
         ) != null) {
             return;
         }

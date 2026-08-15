@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class AdminController {
     private final SellerService sellerService;
-
     @PatchMapping("/seller/{id}/status/{status}")
     public ResponseEntity<Seller> updateSellerStatus(
             @PathVariable Long id ,

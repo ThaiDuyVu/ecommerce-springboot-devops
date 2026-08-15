@@ -71,5 +71,10 @@ public class PaymentOrder {
         updatedAt = LocalDateTime.now();
 
     }
-
+    @Column(
+            nullable = false,
+            unique = true,
+            updatable = false
+    )
+    private String transactionRef;
 }

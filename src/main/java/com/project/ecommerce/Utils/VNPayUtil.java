@@ -9,6 +9,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.UUID;
 
 public final class VNPayUtil {
 
@@ -45,11 +46,14 @@ public final class VNPayUtil {
     /**
      * Mã giao dịch nội bộ
      */
-    public static String generateTxnRef(
-            Long paymentOrderId
-    ) {
+    public static String generateTxnRef() {
 
-        return String.valueOf(paymentOrderId);
+        return "PAY-" +
+                UUID.randomUUID()
+                        .toString()
+                        .replace("-", "")
+                        .substring(0, 12)
+                        .toUpperCase();
 
     }
 
@@ -263,6 +267,23 @@ public final class VNPayUtil {
                 secureHash
         );
 
+    }
+
+    public static String generateTxnRef(Long paymentOrderId) {
+
+        if (paymentOrderId == null) {
+            throw new IllegalArgumentException(
+                    "Payment order id cannot be null"
+            );
+        }
+
+        return paymentOrderId +
+                "-" +
+                UUID.randomUUID()
+                        .toString()
+                        .replace("-", "")
+                        .substring(0, 12)
+                        .toUpperCase();
     }
 
 }

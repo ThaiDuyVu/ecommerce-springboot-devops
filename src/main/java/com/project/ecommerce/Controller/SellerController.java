@@ -1,6 +1,5 @@
 package com.project.ecommerce.Controller;
 
-import com.project.ecommerce.Config.JwtProvider;
 import com.project.ecommerce.Enums.AccountStatus;
 import com.project.ecommerce.Model.Seller;
 import com.project.ecommerce.Model.SellerReport;
@@ -25,10 +24,7 @@ import java.util.List;
 public class SellerController {
     private final SellerService sellerService;
     private final AuthService authService ;
-
-    private final JwtProvider jwtProvider;
     private final SellerReportService sellerReportService;
-
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> loginSeller(@RequestBody LoginRequest request) throws Exception {
