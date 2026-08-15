@@ -70,10 +70,42 @@ public class PaymentServiceImpl implements PaymentService {
     ) {
 
         if (orders == null || orders.isEmpty()) {
+
             throw new IllegalArgumentException(
                     "Orders cannot be empty"
             );
         }
+
+
+        /*
+         * Không cho phép thanh toán lại Order
+         * đã hoàn tất thanh toán.
+         */
+        for (Order order : orders) {
+
+            if (order.getPaymentDetails() == null) {
+
+                throw new InvalidOperationException(
+                        "Payment details not found for order #"
+                                + order.getId()
+                );
+            }
+
+
+            if (
+                    order.getPaymentDetails()
+                            .getPaymentStatus()
+                            == PaymentStatus.COMPLETED
+            ) {
+
+                throw new InvalidOperationException(
+                        "Order #"
+                                + order.getId()
+                                + " has already been paid"
+                );
+            }
+        }
+
 
         long amount =
                 orders.stream()
@@ -82,8 +114,10 @@ public class PaymentServiceImpl implements PaymentService {
                         .mapToLong(Integer::longValue)
                         .sum();
 
+
         PaymentOrder paymentOrder =
                 new PaymentOrder();
+
 
         paymentOrder.setUser(user);
 
@@ -97,20 +131,27 @@ public class PaymentServiceImpl implements PaymentService {
                 PaymentOrderStatus.PENDING
         );
 
+
         /*
          * Transaction reference nội bộ.
          *
-         * VNPay sẽ sử dụng transaction reference riêng
-         * được tạo từ paymentOrderId trong createVNPayPaymentUrl().
+         * VNPay sử dụng transaction reference
+         * riêng, không dùng trực tiếp Order ID.
          */
         paymentOrder.setTransactionRef(
                 VNPayUtil.generateTxnRef()
         );
 
-        PaymentOrder saved =
-                paymentOrderRepository.save(paymentOrder);
 
-        return paymentOrderMapper.toResponse(saved);
+        PaymentOrder saved =
+                paymentOrderRepository.save(
+                        paymentOrder
+                );
+
+
+        return paymentOrderMapper.toResponse(
+                saved
+        );
     }
 
 
