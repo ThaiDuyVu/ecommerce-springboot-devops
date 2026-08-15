@@ -44,12 +44,6 @@ public class SellerServiceImpl implements SellerService {
     @Override
     public Seller createSeller(CreateSellerRequest request) {
 
-        User existingUser = userRepository.findByEmail(request.getEmail());
-
-        if (existingUser != null) {
-            throw new DuplicateResourceException("Email already exists");
-        }
-
         Seller existingSeller = sellerRepository.findByEmail(request.getEmail());
 
         if (existingSeller != null) {

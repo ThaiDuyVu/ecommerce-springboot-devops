@@ -112,7 +112,6 @@ public class OtpServiceImpl implements OtpService {
     public VerificationCode getByEmail(String email) {
 
         return verifcationCodeRepository.findByEmail(email);
-
     }
     @Override
     public VerificationCode getByOtp(String otp) {

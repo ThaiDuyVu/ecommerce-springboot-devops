@@ -25,19 +25,31 @@ import java.util.Collections;
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class AppConfig {
+
     private final JwtTokenValidator jwtTokenValidator;
+
+    private final JwtAuthenticationEntryPoint authenticationEntryPoint;
+
+    private final JwtAccessDeniedHandler accessDeniedHandler;
+
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http
+    ) throws Exception {
 
         http
                 .sessionManagement(management ->
-                        management.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                        management.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
                 )
 
                 .authorizeHttpRequests(authorize -> authorize
+
                         .requestMatchers(
                                 "/payments/vnpay-return"
                         ).permitAll()
+
                         .requestMatchers(
                                 "/auth/**",
                                 "/sellers/**"
@@ -60,39 +72,79 @@ public class AppConfig {
                         .anyRequest()
                         .authenticated()
                 )
-                .addFilterBefore(        jwtTokenValidator,
-                        BasicAuthenticationFilter.class)
-                .csrf(csrf -> csrf.disable())
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()));
+
+                .exceptionHandling(exception -> exception
+
+                        .authenticationEntryPoint(
+                                authenticationEntryPoint
+                        )
+
+                        .accessDeniedHandler(
+                                accessDeniedHandler
+                        )
+                )
+
+                .addFilterBefore(
+                        jwtTokenValidator,
+                        BasicAuthenticationFilter.class
+                )
+
+                .csrf(csrf ->
+                        csrf.disable()
+                )
+
+                .cors(cors ->
+                        cors.configurationSource(
+                                corsConfigurationSource()
+                        )
+                );
 
         return http.build();
     }
 
     @Bean
-    AuthenticationManager authenticationManager(AuthenticationConfiguration config)
-            throws Exception {
+    AuthenticationManager authenticationManager(
+            AuthenticationConfiguration config
+    ) throws Exception {
+
         return config.getAuthenticationManager();
     }
 
     @Bean
     PasswordEncoder passwordEncoder() {
+
         return new BCryptPasswordEncoder();
     }
 
     @Bean
     public RestTemplate restTemplate() {
+
         return new RestTemplate();
     }
 
     private CorsConfigurationSource corsConfigurationSource() {
+
         return request -> {
-            CorsConfiguration cfg = new CorsConfiguration();
 
-            cfg.setAllowedOrigins(Collections.singletonList("*"));
-            cfg.setAllowedMethods(Collections.singletonList("*"));
-            cfg.setAllowedHeaders(Collections.singletonList("*"));
+            CorsConfiguration cfg =
+                    new CorsConfiguration();
 
-            cfg.setExposedHeaders(Collections.singletonList("Authorization"));
+            cfg.setAllowedOrigins(
+                    Collections.singletonList("*")
+            );
+
+            cfg.setAllowedMethods(
+                    Collections.singletonList("*")
+            );
+
+            cfg.setAllowedHeaders(
+                    Collections.singletonList("*")
+            );
+
+            cfg.setExposedHeaders(
+                    Collections.singletonList("Authorization")
+            );
+
             cfg.setMaxAge(3600L);
 
             return cfg;

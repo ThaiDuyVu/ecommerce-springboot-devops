@@ -30,8 +30,11 @@ import lombok.RequiredArgsConstructor;
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
 
 @Service
 @RequiredArgsConstructor
@@ -53,6 +56,11 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final TransactionService transactionService;
 
+
+    // ============================================================
+    // CREATE PAYMENT ORDER
+    // ============================================================
+
     @Override
     @Transactional
     public PaymentOrderResponse createPaymentOrder(
@@ -62,11 +70,9 @@ public class PaymentServiceImpl implements PaymentService {
     ) {
 
         if (orders == null || orders.isEmpty()) {
-
             throw new IllegalArgumentException(
                     "Orders cannot be empty"
             );
-
         }
 
         long amount =
@@ -91,12 +97,26 @@ public class PaymentServiceImpl implements PaymentService {
                 PaymentOrderStatus.PENDING
         );
 
+        /*
+         * Transaction reference nội bộ.
+         *
+         * VNPay sẽ sử dụng transaction reference riêng
+         * được tạo từ paymentOrderId trong createVNPayPaymentUrl().
+         */
+        paymentOrder.setTransactionRef(
+                VNPayUtil.generateTxnRef()
+        );
+
         PaymentOrder saved =
                 paymentOrderRepository.save(paymentOrder);
 
         return paymentOrderMapper.toResponse(saved);
-
     }
+
+
+    // ============================================================
+    // GET PAYMENT ORDER
+    // ============================================================
 
     @Override
     public PaymentOrderResponse getPaymentOrderById(
@@ -115,8 +135,8 @@ public class PaymentServiceImpl implements PaymentService {
         return paymentOrderMapper.toResponse(
                 paymentOrder
         );
-
     }
+
 
     @Override
     public PaymentOrder getPaymentOrderEntityById(
@@ -130,8 +150,8 @@ public class PaymentServiceImpl implements PaymentService {
                                         + paymentOrderId
                         )
                 );
-
     }
+
 
     @Override
     public PaymentOrder getPaymentOrderEntityByPaymentLinkId(
@@ -146,8 +166,12 @@ public class PaymentServiceImpl implements PaymentService {
                                         + paymentLinkId
                         )
                 );
-
     }
+
+
+    // ============================================================
+    // RAZORPAY - PROCESS PAYMENT
+    // ============================================================
 
     @Override
     @Transactional
@@ -167,7 +191,6 @@ public class PaymentServiceImpl implements PaymentService {
             throw new InvalidOperationException(
                     "Payment order has already been processed"
             );
-
         }
 
         RazorpayClient razorpayClient =
@@ -225,13 +248,11 @@ public class PaymentServiceImpl implements PaymentService {
                         savedPaymentOrder,
                         savedOrder
                 );
-
             }
 
             return paymentOrderMapper.toResponse(
                     savedPaymentOrder
             );
-
         }
 
         paymentOrder.setStatus(
@@ -267,14 +288,17 @@ public class PaymentServiceImpl implements PaymentService {
             orderRepository.save(
                     order
             );
-
         }
 
         return paymentOrderMapper.toResponse(
                 savedPaymentOrder
         );
-
     }
+
+
+    // ============================================================
+    // RAZORPAY - CREATE PAYMENT LINK
+    // ============================================================
 
     @Override
     @Transactional
@@ -289,7 +313,6 @@ public class PaymentServiceImpl implements PaymentService {
             throw new IllegalArgumentException(
                     "User cannot be null"
             );
-
         }
 
         if (amount == null || amount <= 0) {
@@ -297,7 +320,6 @@ public class PaymentServiceImpl implements PaymentService {
             throw new IllegalArgumentException(
                     "Amount must be greater than zero"
             );
-
         }
 
         PaymentOrder paymentOrder =
@@ -390,8 +412,12 @@ public class PaymentServiceImpl implements PaymentService {
         );
 
         return paymentLink.get("short_url");
-
     }
+
+
+    // ============================================================
+    // STRIPE - CREATE PAYMENT LINK
+    // ============================================================
 
     @Override
     public String createStripePaymentLink(
@@ -454,7 +480,6 @@ public class PaymentServiceImpl implements PaymentService {
                                                                         )
 
                                                                         .build()
-
                                                         )
 
                                                         .build()
@@ -471,8 +496,12 @@ public class PaymentServiceImpl implements PaymentService {
                 Session.create(params);
 
         return session.getUrl();
-
     }
+
+
+    // ============================================================
+    // VNPAY - CREATE PAYMENT URL
+    // ============================================================
 
     @Override
     public String createVNPayPaymentUrl(
@@ -481,36 +510,43 @@ public class PaymentServiceImpl implements PaymentService {
             Long paymentOrderId
     ) {
 
-        if(user == null){
+        if (user == null) {
 
             throw new IllegalArgumentException(
                     "User cannot be null"
             );
-
         }
 
-
-        if(amount == null || amount <= 0){
+        if (amount == null || amount <= 0) {
 
             throw new IllegalArgumentException(
                     "Amount must be greater than zero"
             );
-
         }
 
-        Map<String,String> params =
+        /*
+         * VNPay TxnRef phải chứa paymentOrderId để callback
+         * có thể xác định PaymentOrder tương ứng.
+         *
+         * Ví dụ:
+         *
+         * 15-AB12CD34EF56
+         */
+        String transactionRef =
+                VNPayUtil.generateTxnRef(paymentOrderId);
+
+        Map<String, String> params =
                 buildVNPayParams(
                         user,
                         amount,
+                        transactionRef,
                         paymentOrderId
                 );
-
 
         String hashData =
                 VNPayUtil.buildHashData(
                         new TreeMap<>(params)
                 );
-
 
         String secureHash =
                 VNPayUtil.hmacSHA512(
@@ -518,133 +554,22 @@ public class PaymentServiceImpl implements PaymentService {
                         hashData
                 );
 
-
         String query =
                 VNPayUtil.buildQuery(
                         new TreeMap<>(params)
                 );
-
 
         return vnPayConfig.getPayUrl()
                 + "?"
                 + query
                 + "&vnp_SecureHash="
                 + secureHash;
-
     }
 
-    @Override
-    @Transactional
-    public PaymentOrderResponse processVNPayCallback(
-            Map<String,String> params
-    ){
 
-        boolean valid =
-                VNPayUtil.verifySignature(
-                        params,
-                        vnPayConfig.getHashSecret()
-                );
-
-
-        if(!valid){
-
-            throw new RuntimeException(
-                    "Invalid VNPay signature"
-            );
-
-        }
-
-
-        String responseCode =
-                params.get("vnp_ResponseCode");
-
-
-        String transactionStatus =
-                params.get("vnp_TransactionStatus");
-
-
-        Long paymentOrderId =
-                Long.parseLong(
-                        params.get("vnp_TxnRef")
-                );
-
-
-        PaymentOrder paymentOrder =
-                paymentOrderRepository.findById(
-                                paymentOrderId
-                        )
-                        .orElseThrow(
-                                () -> new RuntimeException(
-                                        "Payment order not found"
-                                )
-                        );
-
-
-        if(
-                "00".equals(responseCode)
-                        &&
-                        "00".equals(transactionStatus)
-        ){
-
-            paymentOrder.setStatus(
-                    PaymentOrderStatus.SUCCESS
-            );
-
-
-            for(Order order :
-                    paymentOrder.getOrders()){
-
-
-                order.getPaymentDetails()
-                        .setPaymentStatus(
-                                PaymentStatus.COMPLETED
-                        );
-
-
-                order.setOrderStatus(
-                        OrderStatus.CONFIRMED
-                );
-
-
-                orderRepository.save(order);
-
-            }
-
-
-        }
-        else {
-
-
-            paymentOrder.setStatus(
-                    PaymentOrderStatus.FAILED
-            );
-
-
-            for(Order order :
-                    paymentOrder.getOrders()){
-
-                order.getPaymentDetails()
-                        .setPaymentStatus(
-                                PaymentStatus.FAILED
-                        );
-
-                orderRepository.save(order);
-
-            }
-
-
-        }
-        PaymentOrder saved =
-                paymentOrderRepository.save(
-                        paymentOrder
-                );
-
-
-        return paymentOrderMapper.toResponse(
-                saved
-        );
-
-    }
+    // ============================================================
+    // VNPAY - CALLBACK
+    // ============================================================
 
     @Override
     @Transactional
@@ -667,28 +592,73 @@ public class PaymentServiceImpl implements PaymentService {
         String secureHash =
                 params.get("vnp_SecureHash");
 
-        Long paymentOrderId =
-                Long.parseLong(
-                        txnRef.split("-")[0]
-                );
+        if (txnRef == null || txnRef.isBlank()) {
+
+            throw new InvalidOperationException(
+                    "VNPay transaction reference is missing"
+            );
+        }
+
+        /*
+         * TxnRef được tạo theo format:
+         *
+         * paymentOrderId-random
+         *
+         * Ví dụ:
+         *
+         * 15-AB12CD34EF56
+         */
+        String[] txnRefParts =
+                txnRef.split("-");
+
+        if (txnRefParts.length < 2) {
+
+            throw new InvalidOperationException(
+                    "Invalid VNPay transaction reference"
+            );
+        }
+
+        Long paymentOrderId;
+
+        try {
+
+            paymentOrderId =
+                    Long.parseLong(
+                            txnRefParts[0]
+                    );
+
+        } catch (NumberFormatException e) {
+
+            throw new InvalidOperationException(
+                    "Invalid payment order id in VNPay transaction reference"
+            );
+        }
 
         PaymentOrder paymentOrder =
                 getPaymentOrderEntityById(
                         paymentOrderId
                 );
 
-        if (paymentOrder.getStatus() != PaymentOrderStatus.PENDING) {
+        /*
+         * Không cho phép xử lý lại PaymentOrder
+         * đã thành công hoặc thất bại.
+         */
+        if (paymentOrder.getStatus()
+                != PaymentOrderStatus.PENDING) {
 
             throw new InvalidOperationException(
                     "Payment order has already been processed"
             );
-
         }
 
+        /*
+         * Verify VNPay signature trước khi cập nhật database.
+         */
         TreeMap<String, String> hashParams =
                 new TreeMap<>(params);
 
         hashParams.remove("vnp_SecureHash");
+
         hashParams.remove("vnp_SecureHashType");
 
         String hashData =
@@ -702,12 +672,14 @@ public class PaymentServiceImpl implements PaymentService {
                         hashData
                 );
 
-        if (!calculatedHash.equalsIgnoreCase(secureHash)) {
+        if (secureHash == null
+                || !calculatedHash.equalsIgnoreCase(
+                secureHash
+        )) {
 
             throw new InvalidOperationException(
                     "Invalid VNPay signature"
             );
-
         }
 
         boolean success =
@@ -730,7 +702,8 @@ public class PaymentServiceImpl implements PaymentService {
                             paymentOrder
                     );
 
-            for (Order order : savedPaymentOrder.getOrders()) {
+            for (Order order :
+                    savedPaymentOrder.getOrders()) {
 
                 order.getPaymentDetails()
                         .setPaymentId(
@@ -742,6 +715,10 @@ public class PaymentServiceImpl implements PaymentService {
                                 PaymentStatus.COMPLETED
                         );
 
+                order.setOrderStatus(
+                        OrderStatus.CONFIRMED
+                );
+
                 Order savedOrder =
                         orderRepository.save(
                                 order
@@ -751,15 +728,16 @@ public class PaymentServiceImpl implements PaymentService {
                         savedPaymentOrder,
                         savedOrder
                 );
-
             }
 
             return paymentOrderMapper.toResponse(
                     savedPaymentOrder
             );
-
         }
 
+        /*
+         * VNPay trả về giao dịch thất bại.
+         */
         paymentOrder.setStatus(
                 PaymentOrderStatus.FAILED
         );
@@ -769,7 +747,13 @@ public class PaymentServiceImpl implements PaymentService {
                         paymentOrder
                 );
 
-        for (Order order : savedPaymentOrder.getOrders()) {
+        for (Order order :
+                savedPaymentOrder.getOrders()) {
+
+            order.getPaymentDetails()
+                    .setPaymentId(
+                            transactionNo
+                    );
 
             order.getPaymentDetails()
                     .setPaymentStatus(
@@ -779,118 +763,269 @@ public class PaymentServiceImpl implements PaymentService {
             orderRepository.save(
                     order
             );
-
         }
 
         return paymentOrderMapper.toResponse(
                 savedPaymentOrder
         );
-
     }
 
-    private Map<String,String> buildVNPayParams(
+
+    // ============================================================
+    // VNPAY - OLD CALLBACK METHOD
+    // ============================================================
+
+    /*
+     * Giữ method này để không phá vỡ PaymentService interface
+     * hoặc code Controller hiện tại nếu đang sử dụng nó.
+     *
+     * Tuy nhiên flow chính nên sử dụng processVNPayPayment().
+     */
+    @Override
+    @Transactional
+    public PaymentOrderResponse processVNPayCallback(
+            Map<String, String> params
+    ) {
+
+        boolean valid =
+                VNPayUtil.verifySignature(
+                        params,
+                        vnPayConfig.getHashSecret()
+                );
+
+        if (!valid) {
+
+            throw new InvalidOperationException(
+                    "Invalid VNPay signature"
+            );
+        }
+
+        String responseCode =
+                params.get("vnp_ResponseCode");
+
+        String transactionStatus =
+                params.get("vnp_TransactionStatus");
+
+        String txnRef =
+                params.get("vnp_TxnRef");
+
+        if (txnRef == null || txnRef.isBlank()) {
+
+            throw new InvalidOperationException(
+                    "VNPay transaction reference is missing"
+            );
+        }
+
+        String[] txnRefParts =
+                txnRef.split("-");
+
+        if (txnRefParts.length < 2) {
+
+            throw new InvalidOperationException(
+                    "Invalid VNPay transaction reference"
+            );
+        }
+
+        Long paymentOrderId;
+
+        try {
+
+            paymentOrderId =
+                    Long.parseLong(
+                            txnRefParts[0]
+                    );
+
+        } catch (NumberFormatException e) {
+
+            throw new InvalidOperationException(
+                    "Invalid payment order id in VNPay transaction reference"
+            );
+        }
+
+        PaymentOrder paymentOrder =
+                paymentOrderRepository.findById(
+                                paymentOrderId
+                        )
+                        .orElseThrow(
+                                () -> new ResourceNotFoundException(
+                                        "Payment order not found with id: "
+                                                + paymentOrderId
+                                )
+                        );
+
+        if (paymentOrder.getStatus()
+                != PaymentOrderStatus.PENDING) {
+
+            throw new InvalidOperationException(
+                    "Payment order has already been processed"
+            );
+        }
+
+        boolean success =
+                "00".equals(responseCode)
+                        &&
+                        "00".equals(transactionStatus);
+
+        String transactionNo =
+                params.get("vnp_TransactionNo");
+
+        if (success) {
+
+            paymentOrder.setStatus(
+                    PaymentOrderStatus.SUCCESS
+            );
+
+            paymentOrder.setPaymentLinkId(
+                    transactionNo
+            );
+
+            for (Order order :
+                    paymentOrder.getOrders()) {
+
+                order.getPaymentDetails()
+                        .setPaymentId(
+                                transactionNo
+                        );
+
+                order.getPaymentDetails()
+                        .setPaymentStatus(
+                                PaymentStatus.COMPLETED
+                        );
+
+                order.setOrderStatus(
+                        OrderStatus.CONFIRMED
+                );
+
+                orderRepository.save(
+                        order
+                );
+            }
+
+        } else {
+
+            paymentOrder.setStatus(
+                    PaymentOrderStatus.FAILED
+            );
+
+            for (Order order :
+                    paymentOrder.getOrders()) {
+
+                order.getPaymentDetails()
+                        .setPaymentId(
+                                transactionNo
+                        );
+
+                order.getPaymentDetails()
+                        .setPaymentStatus(
+                                PaymentStatus.FAILED
+                        );
+
+                orderRepository.save(
+                        order
+                );
+            }
+        }
+
+        PaymentOrder saved =
+                paymentOrderRepository.save(
+                        paymentOrder
+                );
+
+        return paymentOrderMapper.toResponse(
+                saved
+        );
+    }
+
+
+    // ============================================================
+    // VNPAY - BUILD PARAMETERS
+    // ============================================================
+
+    private Map<String, String> buildVNPayParams(
             User user,
             Long amount,
+            String transactionRef,
             Long paymentOrderId
-    ){
+    ) {
 
-        Map<String,String> params =
+        Map<String, String> params =
                 new HashMap<>();
-
 
         params.put(
                 "vnp_Version",
                 vnPayConfig.getVersion()
         );
 
-
         params.put(
                 "vnp_Command",
                 vnPayConfig.getCommand()
         );
-
 
         params.put(
                 "vnp_TmnCode",
                 vnPayConfig.getTmnCode()
         );
 
-
         params.put(
                 "vnp_Amount",
                 String.valueOf(amount * 100)
         );
-
 
         params.put(
                 "vnp_CurrCode",
                 vnPayConfig.getCurrency()
         );
 
-
         params.put(
                 "vnp_TxnRef",
-                VNPayUtil.generateTxnRef(
-                        paymentOrderId
-                )
+                transactionRef
         );
-
 
         params.put(
                 "vnp_OrderInfo",
                 "Payment order #" + paymentOrderId
         );
 
-
         params.put(
                 "vnp_OrderType",
                 vnPayConfig.getOrderType()
         );
-
 
         params.put(
                 "vnp_Locale",
                 vnPayConfig.getLocale()
         );
 
-
         params.put(
                 "vnp_ReturnUrl",
                 vnPayConfig.getReturnUrl()
         );
-
 
         params.put(
                 "vnp_CreateDate",
                 VNPayUtil.getCurrentDate()
         );
 
-
         params.put(
                 "vnp_ExpireDate",
                 VNPayUtil.getExpireDate()
         );
-
 
         params.put(
                 "vnp_IpAddr",
                 "127.0.0.1"
         );
 
-
         params.put(
                 "vnp_Bill_FirstName",
                 user.getFullName()
         );
-
 
         params.put(
                 "vnp_Bill_Email",
                 user.getEmail()
         );
 
-
         return params;
-
     }
 }

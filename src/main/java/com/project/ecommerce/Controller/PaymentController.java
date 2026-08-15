@@ -6,6 +6,7 @@ import com.project.ecommerce.Response.PaymentOrderResponse;
 import com.project.ecommerce.Service.*;
 import com.razorpay.RazorpayException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -155,15 +156,25 @@ public class PaymentController {
 
     }
     @GetMapping("/vnpay-return")
-    public ResponseEntity<PaymentOrderResponse> vnpayReturn(
-            @RequestParam Map<String,String> params
+    public ResponseEntity<Void> vnpayReturn(
+            @RequestParam Map<String, String> params
     ) {
 
-        return ResponseEntity.ok(
-                paymentService.processVNPayPayment(
-                        params
+        PaymentOrderResponse response =
+                paymentService.processVNPayPayment(params);
+
+        String redirectUrl =
+                "http://localhost:5173/payment/success"
+                        + "?paymentOrderId="
+                        + response.getId();
+
+        return ResponseEntity
+                .status(HttpStatus.FOUND)
+                .header(
+                        HttpHeaders.LOCATION,
+                        redirectUrl
                 )
-        );
+                .build();
 
     }
 }
